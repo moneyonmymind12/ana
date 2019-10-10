@@ -1,0 +1,376 @@
+import re
+from datetime import datetime
+import pandas as pd
+import seaborn as sns
+import numpy as np
+from datetime import datetime
+from collections import Counter
+import matplotlib.pyplot as plt
+font = {'family': 'MicroSoft Yahei',
+        'weight': 'bold',
+        'size': 13}
+plt.rc("font", **font)
+plt.rcParams['font.sans-serif']=['SimHei']
+plt.rcParams['axes.unicode_minus']=False
+# -*- coding: utf-8 -*-
+#import  time
+import time
+agepic='半年数据2.csv'
+agepic=pd.read_csv(agepic)
+agepic.columns=['mobile','rate','shopid','d','type','cost','point','h','time']
+agepic=agepic[~(agepic.type=='特卖')]
+agepic=agepic[~(agepic.type=='推广')]
+agepic.loc[agepic['type']=='餐饮-正餐','type']='餐饮'
+agepic.loc[agepic['type']=='餐饮-正餐','type']='餐饮'
+agepic.loc[agepic['type']=='儿童—儿童零售','type']='儿童'
+agepic.loc[agepic['type']=='百货—主力店百货','type']='百货'
+agepic.loc[agepic['type']=='服装—综合店铺','type']='服装'
+agepic.loc[agepic['type']=='儿童—儿童教育 ','type']='儿童'
+agepic.loc[agepic['type']=='家用—教育培训 ','type']='家用'
+agepic.loc[agepic['type']=='皮具—鞋 ','type']='皮具'
+agepic.loc[agepic['type']=='餐饮—零售餐饮 ','type']='餐饮'
+agepic.loc[agepic['type']=='配饰—腕表','type']='配饰'
+agepic.loc[agepic['type']=='餐饮—正餐','type']='餐饮'
+agepic.loc[agepic['type']=='儿童—儿童教育','type']='儿童'
+agepic.loc[agepic['type']=='皮具—鞋','type']='皮具'
+agepic.loc[agepic['type']=='家用—教育培训','type']='家用'
+agepic.loc[agepic['type']=='餐饮—零售餐饮','type']='餐饮'
+
+
+
+typetype=agepic[['mobile','type']]
+
+#算出每个类平均值
+
+typetype=typetype.groupby('mobile').agg(lambda x: x.value_counts().index[0]).reset_index()
+
+typetype.columns=['mobile','type']
+
+typetype.loc[typetype['type']=='餐饮','typenum']=agepic.loc[agepic['type']=='餐饮']['cost'].mean()
+typetype.loc[typetype['type']=='超市','typenum']=agepic.loc[agepic['type']=='超市']['cost'].mean()
+typetype.loc[typetype['type']=='服装','typenum']=agepic.loc[agepic['type']=='服装']['cost'].mean()
+typetype.loc[typetype['type']=='儿童','typenum']=agepic.loc[agepic['type']=='儿童']['cost'].mean()
+typetype.loc[typetype['type']=='冰场','typenum']=agepic.loc[agepic['type']=='冰场']['cost'].mean()
+typetype.loc[typetype['type']=='精品礼品','typenum']=agepic.loc[agepic['type']=='精品礼品']['cost'].mean()
+typetype.loc[typetype['type']=='家用','typenum']=agepic.loc[agepic['type']=='家用']['cost'].mean()
+typetype.loc[typetype['type']=='配饰','typenum']=agepic.loc[agepic['type']=='配饰']['cost'].mean()
+typetype.loc[typetype['type']=='个人护理','typenum']=agepic.loc[agepic['type']=='个人护理']['cost'].mean()
+typetype.loc[typetype['type']=='皮具','typenum']=agepic.loc[agepic['type']=='皮具']['cost'].mean()
+typetype.loc[typetype['type']=='服务','typenum']=agepic.loc[agepic['type']=='服务']['cost'].mean()
+typetype.loc[typetype['type']=='百货','typenum']=agepic.loc[agepic['type']=='百货']['cost'].mean()
+typetype.loc[typetype['type']=='娱乐','typenum']=agepic.loc[agepic['type']=='娱乐']['cost'].mean()
+
+
+# typetype.loc[typetype['typenum']==0,'costmean']=0
+# typetype.loc[typetype['typenum']==1,'costmean']=1
+# typetype.loc[typetype['typenum']==2,'costmean']=2
+# typetype.loc[typetype['typenum']==3,'costmean']=3
+# typetype.loc[typetype['typenum']==4,'costmean']=4
+# typetype.loc[typetype['typenum']==5,'costmean']=5
+# typetype.loc[typetype['typenum']==6,'costmean']=6
+# typetype.loc[typetype['typenum']==7,'costmean']=7
+# typetype.loc[typetype['typenum']==8,'costmean']=8
+# typetype.loc[typetype['typenum']==9,'costmean']=9
+# typetype.loc[typetype['typenum']==10,'costmean']=10
+# typetype.loc[typetype['typenum']==11,'costmean']=11
+# typetype.loc[typetype['typenum']==12,'costmean']=12
+
+#
+#print(typetype['typenum'].value_counts())
+typetype=typetype[['mobile','typenum']]
+#mean_alldata['Age']=mean_alldata['Age'].fillna( mean_alldata['Age'].mean() )
+typetype['typenum']=typetype['typenum'].fillna(agepic.loc[agepic['type']=='餐饮']['cost'].mean())
+
+huiyuan='注册时间.csv'
+huiyuan=pd.read_csv(huiyuan)
+huiyuan.columns=['mobile','huitime']
+huiyuan['end']=None
+huiyuan['end']=huiyuan['end'].fillna('2019/1/1 23:59')
+huiyuan['LL']=pd.DataFrame(pd.to_datetime(huiyuan['end']) - pd.to_datetime(huiyuan['huitime']))
+huiyuan=huiyuan[['mobile','LL']]
+#print(huiyuan.head(10))
+#L,注册时间距今
+costmax=agepic[['mobile','cost']]
+costmax=costmax.groupby('mobile').agg(max).reset_index()
+costmax.columns=['mobile','maxcost']
+
+
+costmax.highcost= costmax.maxcost.astype(float)
+
+costmax=costmax[['mobile','maxcost']]
+print(costmax['maxcost'].describe())
+costmax['maxcost']=costmax['maxcost'].fillna(1457)
+
+agepic.cost= agepic.cost.astype(float)
+costgp=agepic.groupby(['mobile'])['cost'].sum().reset_index()
+costgp.columns=['mobile','costall']
+
+pointgp=agepic.groupby(['mobile'])['point'].count().reset_index()
+pointgp.columns=['mobile','pointall']
+
+#消费积分总数行了merge开始
+agepic['end']=None
+#bb['end']=bb['end'].fillna('2019/8/30 23:59')
+agepic['end']=agepic['end'].fillna('2019/1/1 23:59')
+#bb['now']=pd.DataFrame(pd.to_datetime(bb['end']) - pd.to_datetime(bb['time']))
+agepic['now']=pd.DataFrame(pd.to_datetime(agepic['end']) - pd.to_datetime(agepic['time']))
+ddd=agepic[['mobile','now']]
+ddd=ddd.groupby('mobile').agg('min')
+
+timemax=agepic[['mobile','time']]
+timemax['time']=pd.to_datetime(timemax['time'])
+#为空的删掉
+# timemax.groupby('mobile')['time'].count()
+#还得截取出天数
+timemax = timemax.sort_values(by = 'time')
+#timemax=timemax.groupby('mobile').agg(lambda x:np.max(x-x.shift())).reset_index()
+timemax=timemax.groupby('mobile').agg(lambda x:np.max(x-x.shift())).reset_index()
+timemax.columns=['mobile','maxtime']
+#ty_data_df=ty_data_df[ pd.notnull(ty_data_df["激活时间"])]
+timemax=timemax[pd.notnull(timemax['maxtime'])]
+#bb=bb[bb['time']>'1 days 00:00:00']
+timemax=timemax[timemax['maxtime']>'1 days 00:00:00']
+
+
+shopcount=agepic[['mobile','shopid']]
+
+shopcount=shopcount.groupby(['mobile'])['shopid'].nunique().reset_index()
+shopcount.columns=['mobile','scount']
+print(shopcount.head(10))
+
+havecar=pd.merge(ddd,costgp,on=['mobile'])
+three=pd.merge(havecar,pointgp,on=['mobile'])
+four=pd.merge(three,typetype,on=['mobile'])
+five=pd.merge(four,huiyuan,on=['mobile'])
+six=pd.merge(five,costmax,on=['mobile'])
+#timemax.columns=['mobile','maxtime']
+seven=pd.merge(six,shopcount,on=['mobile'])
+# print(seven[['mobile','scount']].head(10))
+eight=pd.merge(seven,timemax,on=['mobile'],how='right')
+
+eight=eight[pd.notnull(eight['costall'])]
+
+
+train=eight.copy()
+print(train[['mobile',]])
+train['R']=train['now'].map(lambda x : x/np.timedelta64(60*24*30,'m'))
+train['M']=train['costall']
+train['F']=train['pointall']
+# train['F']=train['costall']
+# train['M']=train['pointall']
+#train['L']=train['LL'].map(lambda x : x/np.timedelta64(60*24*30,'m'))
+#train['A']=train['typenum']
+train['B']=train['maxcost']
+train['C']=train['maxtime'].map(lambda x : x/np.timedelta64(60*24*30,'m'))
+train['D']=train['scount']
+train['E']=train['M']/train['F']
+# train['C']=train['F']/train['M']
+#train['mo']=train['mobile']
+#输出为文件
+train2=train[['R','F','M','B','C','D','E']]
+# train2=train[['R','F','M','L','B']]
+#修改这个
+#train2.to_csv('六特征.csv',encoding='utf-8',index=False)
+# print(train['R'].count())
+# print(train['F'].count())
+# print(train['M'].count())
+# print(train['L'].count())
+# print(train['A'].count())
+# print(train['B'].count())
+#最后两个为什么有缺失值
+from sklearn import preprocessing
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['R'].values.reshape(-1,1))
+train2['R']=scaler.transform(train2['R'].values.reshape(-1,1))
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['F'].values.reshape(-1,1))
+train2['F']=scaler.transform(train2['F'].values.reshape(-1,1))
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['M'].values.reshape(-1,1))
+train2['M']=scaler.transform(train2['M'].values.reshape(-1,1))
+
+# scaler = preprocessing.StandardScaler()
+# scaler.fit(train2['L'].values.reshape(-1,1))
+# train2['L']=scaler.transform(train2['L'].values.reshape(-1,1))
+# train2['L']=train2['L']*0.8
+
+# scaler = preprocessing.StandardScaler()
+# scaler.fit(train2['A'].values.reshape(-1,1))
+# train2['A']=scaler.transform(train2['A'].values.reshape(-1,1))
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['B'].values.reshape(-1,1))
+train2['B']=scaler.transform(train2['B'].values.reshape(-1,1))
+train2['B']=train2['B']*1.5
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['C'].values.reshape(-1,1))
+train2['C']=scaler.transform(train2['C'].values.reshape(-1,1))
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['D'].values.reshape(-1,1))
+train2['D']=scaler.transform(train2['D'].values.reshape(-1,1))
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(train2['E'].values.reshape(-1,1))
+train2['E']=scaler.transform(train2['E'].values.reshape(-1,1))
+# scaler = preprocessing.StandardScaler()
+# scaler.fit(train2['C'].values.reshape(-1,1))
+# train2['C']=scaler.transform(train2['C'].values.reshape(-1,1))
+
+#print(train2[['E','BE']])
+
+train3=train2.copy()
+
+from sklearn.cluster import KMeans
+model=KMeans(n_clusters=8,random_state=7)
+model.fit(train3)
+final=pd.concat([train3,pd.Series(model.labels_)],axis=1)
+final.columns=list(train3.columns)+['类别']
+final['类别']=final.where(final.apply(lambda x: x.map(x.value_counts()))>=25,'others')['类别']
+final=final[final['类别']!='others']
+print(final['类别'].value_counts())
+
+plt.rcParams['font.sans-serif']=['SimHei']
+plt.rcParams['axes.unicode_minus']=False
+
+font = {'family': 'MicroSoft Yahei',
+        'weight': 'bold',
+        'size': 13}
+
+plt.rc("font", **font)
+
+
+from mpl_toolkits.mplot3d import Axes3D
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+#tsne = TSNE(n_components=2)
+pca = PCA(n_components=2)
+# new_pca = pd.DataFrame(pca.fit_transform(new_df))
+#print(final)
+final.columns=['R','F','M','B','C','D','E','类别']
+train3=final[['R','F','M','B','C','D','E']]
+
+#删除异常值
+# #异常值处理
+# low = .05
+# high = .95
+# for index,value in enumerate(train3.columns):
+#     if index>0:
+#         quant_low_value=train3[value].quantile(low)
+#         quant_high_value=train3[value].quantile(high)
+#         train3.loc[train3[value]<quant_low_value,value]=quant_low_value
+#         train3.loc[train3[value]>quant_high_value,value]=quant_high_value
+
+
+# final.columns=['R','F','M','L','B','类别']
+# train3=final[['R','F','M','L','B',]]
+
+decomposition_data = pca.fit_transform(final)
+#decomposition_data = tsne.fit_transform(final)
+x = []
+y = []
+for i in decomposition_data:
+    x.append(i[0])
+    y.append(i[1])
+
+fig = plt.figure(figsize=(10, 10))
+ax = plt.axes()
+plt.scatter(x, y, c=final['类别'], marker="x")
+#modellabels忘了删几个值了
+plt.xticks(())
+plt.yticks(())
+plt.title('Kmeans的pca降维图')
+plt.show()
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from pylab import *
+rcParams['axes.unicode_minus'] = False
+rcParams['font.sans-serif'] = ['Simhei']
+#zero=final[final['类别']==0]
+data = final[final['类别']==0]
+#final['R'],final['F'],final['M']
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data['R'],data['F'],data['M'],data['B'],data['C'],data['D'],data['E']
+plt.subplot(241)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False, showfliers=False,labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=16)
+#plt.ylabel('纵轴',fontsize=16)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('0',fontsize=6)
+data1 = final[final['类别']==1]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data1['R'],data1['F'],data1['M'],data1['B'],data1['C'],data1['D'],data1['E']
+plt.subplot(242)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False,showfliers=False, labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'},medianprops={'color':'green','linewidth':'1.5'})
+#plt.xlabel("横轴2",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('1',fontsize=6)
+
+data2 = final[final['类别']==2]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7=data2['R'],data2['F'],data2['M'],data2['B'],data2['C'],data2['D'],data2['E']
+plt.subplot(243)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False,showfliers=False, labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=16)
+#plt.ylabel('纵轴',fontsize=16)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('2',fontsize=6)
+data3 = final[final['类别']==3]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data3['R'],data3['F'],data3['M'],data3['B'],data3['C'],data3['D'],data3['E']
+plt.subplot(244)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False, showfliers=False,labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('3',fontsize=6)
+
+data4 = final[final['类别']==4]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data4['R'],data4['F'],data4['M'],data4['B'],data4['C'],data4['D'],data4['E']
+plt.subplot(245)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False,showfliers=False, labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('4',fontsize=6)
+
+data5= final[final['类别']==5]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data5['R'],data5['F'],data5['M'],data5['B'],data5['C'],data5['D'],data5['E']
+plt.subplot(246)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False, showfliers=False,labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('5',fontsize=6)
+
+
+data6= final[final['类别']==6]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data6['R'],data6['F'],data6['M'],data6['B'],data6['C'],data6['D'],data6['E']
+plt.subplot(247)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False, showfliers=False,labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('6',fontsize=6)
+
+data7= final[final['类别']==7]
+box_1, box_2, box_3,box_4, box_5, box_6,box_7= data7['R'],data7['F'],data7['M'],data7['B'],data7['C'],data7['D'],data7['E']
+plt.subplot(247)
+labels = 'R','F','M','B','C','D','E'
+plt.boxplot([box_1, box_2, box_3,box_4, box_5, box_6,box_7],notch=False, showfliers=False,labels = labels,patch_artist = False, boxprops = {'color':'black','linewidth':'2.0'},capprops={'color':'black','linewidth':'2.0'})
+#plt.xlabel("横轴",fontsize=20)
+plt.xticks(fontsize=6)
+plt.yticks(fontsize=6)
+plt.title('7',fontsize=6)
+plt.show()
