@@ -1,0 +1,43 @@
+#计算客户对应品牌的客户价值算法,理论参与,代码全部个人完成
+import numpy as np
+import pandas as pd
+train=pd.DataFrame([['小红','ZARA',200,'2018/2/2 22:15'],
+['小明','KA',300,'2018/10/2 22:15'],
+['小红','KA',500,'2018/7/2 22:15'],
+['小明','ZARA',400,'2018/7/2 22:15'],
+['小红','KA',100,'2018/5/2 22:15'],
+['小明','ZARA',200,'2018/3/2 22:15']
+])
+train.columns=['name','shop','cost','time']
+from datetime import datetime
+train['time']=pd.to_datetime(train['time'])
+train['end']=None
+train['end']=train['end'].fillna('2019/1/1 23:59')
+train['end']=pd.to_datetime(train['end'])
+train['timetime']=train['end']-train['time']
+train['timetime']=train['timetime'].dt.days
+from collections import defaultdict
+train=train.sort_values(by=['name','shop','time'])
+train['numnum']=train.groupby(['name','shop']).cumcount()+1
+train['costsum']=train.groupby(['name','shop'])['cost'].cumsum()
+ooo=train[['name','shop','timetime','costsum','numnum']]
+aaa=train.groupby(['name','shop'])['cost'].sum().reset_index()
+fff=train.groupby('shop')['name'].count().reset_index()
+fff.columns=['shop','count']
+aaa.columns=['name','shop','costsum']
+bbb=aaa[['shop','costsum']]
+ccc=bbb.groupby('shop')['costsum'].sum().reset_index()
+ggg=pd.merge(fff,ccc,on='shop')
+ggg['avgcost']=ggg['costsum']/ggg['count']
+kkk=ggg[['shop','avgcost']]
+ppp=pd.merge(ooo,kkk,on='shop',how='left')
+from math import e
+ppp['ft']=1/(1+pow(e,(ppp['costsum']-ppp['avgcost'])*(-6)/ppp['avgcost']))
+ppp['fd']=1-(1/(pow(e,-0.2*(ppp['timetime']-30))+1))
+ppp['fn']=1/(1+pow(e,-1.5*(ppp['numnum']-4)))
+ppp['mout']=pow(ppp['ft'],0.8)*pow(ppp['fd'],0.1)*pow(ppp['fn'],0.3)
+#print(ppp)
+ppp=ppp[['name','shop','mout']]
+ddd=ppp.groupby(['name','shop'])['mout'].sum().reset_index()
+print(ddd)
+
