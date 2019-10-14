@@ -1,0 +1,369 @@
+#算法
+
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import pandas as pd
+import numpy as np
+import warnings 
+import matplotlib
+import matplotlib.pyplot as plt
+import math
+from random import sample
+import datetime
+
+get_ipython().run_line_magic('matplotlib', 'inline')
+
+warnings.filterwarnings('ignore')
+
+matplotlib.rcParams['font.sans-serif'] = ['SimHei']
+matplotlib.rcParams['font.family']='sans-serif'
+matplotlib.rcParams['axes.unicode_minus'] = False
+myfont = matplotlib.font_manager.FontProperties(fname='C:\Windows\Fonts\simsun.ttc')
+
+
+# In[4]:
+
+
+def data_process_zzz(begin_day='2019-06-17',end_day='2019-06-25'):
+    df=pd.read_csv('fyd_raw_data.csv',engine='python',encoding='utf-8',header=None,delimiter='\t',names=['day','apmac','group_name','group_id','mac','time','rss'])
+    groups=[330407530]
+    df=df[(df['day']>=begin_day)&(df['day']<=end_day)]
+    df=df[df['group_id'].isin(groups)]    
+    print(df.shape)
+    
+    dy=pd.read_csv('fyd_dy_raw_data.csv',engine='python',encoding='utf-8',header=None,delimiter='\t',names=['day','group_id','mac'])
+    dy=dy[(dy['day']>=begin_day)&(dy['day']<=end_day)]
+    print(dy.shape)
+    
+    mf=pd.DataFrame(columns=['day','apmac','group_name','group_id','mac','time','rss'])
+    
+    for group in groups:
+        tf1=df[df['group_id']==group]
+        tf2=dy[dy['group_id']==group]['mac']
+        tf3=tf1[~tf1['mac'].isin(tf2)]
+        mf=pd.concat([mf,tf3],ignore_index=True)
+    mf['week']=mf['day'].map(lambda d: datetime.datetime.strptime(d,'%Y-%m-%d').weekday())    
+    
+    mf.to_csv('costumer_raw_data.csv',encoding='utf-8',index=False)
+    print(mf.shape)
+
+
+# In[5]:
+
+
+data_process_zzz()
+
+
+# In[6]:
+
+
+
+#三分钟聚合
+def get_customer_rss(df,group_name,cycle=180):
+    try:
+        raw_data_this_ap=df[df.group_name==group_name].copy()
+        raw_data_this_ap.columns=['day','apmac','group_name','mac','time','signal']
+        raw_data_this_ap['hour']=raw_data_this_ap['time'].str[0:2].astype(int)
+        raw_data_this_ap['minutes']=raw_data_this_ap['time'].str[3:5].astype(int)
+        raw_data_this_ap['seconds']=raw_data_this_ap['time'].str[6:8].astype(int)
+        raw_data_this_ap['timeindex']=(raw_data_this_ap['hour']*3600+raw_data_this_ap['minutes']*60+raw_data_this_ap['seconds'])/cycle
+        raw_data_this_ap['timeindex']=raw_data_this_ap['timeindex'].astype(int)
+
+        
+    
+        mac_hour_count=raw_data_this_ap.loc[:,['mac','day','hour']].drop_duplicates().groupby(['mac','day'])['hour'].count().reset_index()
+        mac_hour_count.columns=['mac','day','hour_count']
+        mac_true_customers=mac_hour_count.loc[(mac_hour_count['hour_count']<3),:]
+
+
+        mac_time_signal_df=raw_data_this_ap.groupby(['mac','day','timeindex'])['signal'].mean().reset_index()
+        mac_time_signal_df.columns=['mac','day','timeindex','signal_avg']
+
+
+        customer_mac_time_signal_df=pd.merge(mac_true_customers,mac_time_signal_df,how='inner',on=['mac','day'])
+        customer_mac_time_signal_df=customer_mac_time_signal_df.loc[:,['mac','day','timeindex','signal_avg']]
+        customer_mac_max_signal_df=customer_mac_time_signal_df.groupby(['mac','day'])['signal_avg'].max().reset_index()
+        customer_mac_max_signal_df.columns=['mac','day','max_signal']
+
+        #顾客的mac 列表
+        #customers_list=mac_hour_count.loc[(mac_hour_count['hour_count']<3),'mac'].drop_duplicates().tolist()
+
+        #返回客流值
+        #raw_data_this_ap=raw_data_this_ap.loc[raw_data_this_ap['mac'].isin(mac_true_customers['mac']),:]
+        
+    except:
+        print('there is a mistake happened when run the func get_customer_rss ')
+    return customer_mac_max_signal_df
+    
+def save_picture(tf,entry_num,days,group_name,threshold):
+    # tf: 该店的频率   
+    plt.figure(figsize=(8,8))
+    try:
+        tf.hist()
+        plt.plot(threshold,1,marker='o',color='r')
+        plt.ylabel('num')
+        plt.xlabel('rss')
+        plt.title('{}'.format(group_name)+'从'+str(min(days))+'至'+str(max(days))+r'的进店人数:   {}'.format(entry_num)+'    阈值为： {}'.format(threshold))
+        plt.savefig('D:/'+group_name+'.jpg')
+    except:
+        print('It is some problem happened when draw the picture of {}'.format(group_name))
+    
+    
+def analysis_data(df,group_name_list,group_info):
+    group_rss_threshold={k:v[-1] for k,v in group_info.items()}
+    analysis_result={}
+    for group_name in group_name_list:
+        print(group_name)
+        av_enum_max=group_info[group_name][1]
+        av_enum_min=group_info[group_name][0]
+        try:
+            #处理数据
+            tf=get_customer_rss(df,group_name=group_name)
+            days=tf.day.drop_duplicates().tolist()
+            
+            #如果没有数据，则停止
+            if len(tf)==0:
+                print('After three minutes agg, '+str(group_name)+' has no data')
+                analysis_result[group_name]=[entry_num,av_entry_num]
+                continue
+                
+            #获取进店人数
+            threshold=group_rss_threshold[group_name]
+            entry_num=(tf['max_signal']>=threshold).sum()
+            av_entry_num=math.floor(entry_num/len(days))
+            
+            
+    
+            #将平均每天的人数大于ev_enum_max的店铺，重新卡阈值
+            avnum=av_enum_max
+            i=1
+            
+            if av_entry_num<=av_enum_max:
+                analysis_result[group_name]=[entry_num,av_entry_num,threshold]
+                #save_picture(tf['max_signal'],entry_num,days,group_name,threshold)
+                continue
+                   
+            while av_entry_num>av_enum_max:
+                #print('{}：av_entry_num is too big, recompute!'.format(group_name))
+                
+                new_threshold=re_compute_enum(tf,days,avnum,group_name,group_rss_threshold,threshold)
+                entry_num=(tf['max_signal']>=new_threshold).sum()
+                av_entry_num=math.floor(entry_num/len(days))
+                print('重新计算的阈值为{}，进店平均人数为{}'.format(new_threshold,av_entry_num))
+                
+                if (avnum==0) or (av_entry_num<=av_enum_min):
+                    break
+                    
+                if threshold!=new_threshold:
+                    threshold=new_threshold
+                    i=1
+                else:
+                    if i in (3,4):
+                        threshold+=1
+                        print('signal not change,so signal add one!')
+                
+                    if i!=5:
+                        i+=1
+                    else:
+                        print('the average entry num is still high and the new_threshold is equal to threshold, but we must stop')
+                        break
+                avnum-=1
+#                 if avnum==3:
+#                     print('entry num is too low to continue!')
+#                     break
+            
+            
+            #储存分析结果
+            analysis_result[group_name]=[entry_num,av_entry_num,new_threshold]
+            #save_picture(tf['max_signal'],entry_num,days,group_name,new_threshold)
+        except:
+            print('There is some mistake in going on the datafram of {}'.format(group_name))
+
+        print('\n')
+    return analysis_result
+
+    
+
+#重新计算阈值
+def re_compute_enum(tf,days,av_enum,group_name,group_rss_threshold,threshold):
+    #取3天内，信号强度前av_enum的人，在第av_enum位置的信号强度平均值
+    #均值向下取整   
+    #print('recompute the number of {}'.format(group_name))
+    
+    if len(days)>=2:
+        dys=days    
+    else:
+        group_rss_threshold[group_name]=tf['max_signal'].sort_values(ascending=False).iloc[av_enum]
+        return threshold
+         
+    #计算阙值，如果阙值大于原来的，才保留，否则沿用
+    thresholds=[]
+    for day in dys:
+        new_threshold=tf[tf['day']==day]['max_signal'].sort_values(ascending=False).iloc[:av_enum].iloc[-1]
+        if new_threshold>threshold:
+            thresholds.append(new_threshold)
+        else:
+            thresholds.append(threshold)
+    threshold=math.floor(np.mean(thresholds))
+
+    
+    #替换阈值
+    group_rss_threshold[group_name]=threshold
+    
+    return threshold
+
+
+# In[7]:
+
+
+df=pd.read_csv('costumer_raw_data.csv',engine='python',encoding='utf-8')
+
+
+# In[8]:
+
+
+df.head()
+
+
+# In[9]:
+
+
+print(np.max(df.day.drop_duplicates()))
+print(np.min(df.day.drop_duplicates()))
+print(df.group_name.drop_duplicates())
+
+
+# In[10]:
+
+
+mf=df.groupby('group_id',as_index=False).head(1)[['group_id','group_name']]
+
+group_id_list=mf['group_id'].tolist()
+
+group_name_list=mf['group_name'].tolist()
+
+#group_thresholds={330407695:[19,21,-80]}
+group_thresholds={k:[9,11,-100] for k in group_id_list}
+
+group_thresholds={name: group_thresholds[idx] for idx,name in zip(group_id_list,group_name_list)}
+
+
+# In[11]:
+
+
+group_thresholds
+
+
+# In[13]:
+
+
+analysis_result=analysis_data(df[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],group_name_list,group_thresholds)
+
+
+# In[19]:
+
+
+week_thresholds=group_thresholds.copy()
+work_thresholds=group_thresholds.copy()
+
+
+# In[20]:
+
+
+
+
+# In[18]:
+
+
+# 未调整阈值前的进店人数
+group_rss_threshold={k: -95 for k in group_name_list}
+
+for group_name in group_name_list:
+    days=df[df['group_name']==group_name]['day'].drop_duplicates().tolist()
+    print(min(days),max(days),group_name)
+    tf=get_customer_rss(df[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],group_name=group_name)   
+    threshold=group_rss_threshold[group_name]
+    
+    entry_num=(tf['max_signal']>=threshold).sum()
+    av_entry_num=math.floor(entry_num/len(days))
+    
+    
+    print('{}阈值为：{}时，{}天的进店人数为：{}，平均进店人数为:{}'.format(group_name,threshold,len(days),entry_num,av_entry_num))
+    print('-----------------------------')    
+
+
+# In[24]:
+
+
+#重新计算阈值
+df_workday=df[df['week'].isin([0,1,2,3,4])]
+df_weekend=df[df['week'].isin([5,6])]
+
+week_analysis_result=analysis_data(df_weekend[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],group_name_list,week_thresholds)
+print('\n')
+workday_analysis_result=analysis_data(df_workday[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],group_name_list,work_thresholds)
+
+
+# In[22]:
+
+
+week_analysis_result
+
+
+# In[25]:
+
+
+workday_analysis_result
+
+
+# In[29]:
+
+
+analysis_result={}
+for k in week_thresholds:
+    analysis_result[k]=np.int((week_analysis_result[k][-1]+workday_analysis_result[k][-1])/2)
+
+
+# In[30]:
+
+
+analysis_result
+
+
+# In[46]:
+
+
+group_name='海'
+group_rss_threshold={group_name:-59}
+tf=get_customer_rss(df[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],group_name=group_name) 
+threshold=group_rss_threshold[group_name]
+tf=tf[tf['max_signal']>=threshold]
+ttf=tf.groupby('day',as_index=False)['mac'].agg({'count':'count'})
+ttf['week']=ttf['day'].map(lambda d: datetime.datetime.strptime(d,'%Y-%m-%d').weekday())  
+
+
+# In[13]:
+
+
+begin_day='2019-05-29'
+end_day='2019-06-18'
+#mf=df[(df['day']>=begin_day)&(df['day']<=end_day)]
+mf=df[~df['day'].isin(['2019-06-01','2019-05-26','2019-06-02'])]
+analysis_result=analysis_data(mf[['day', 'apmac', 'group_name', 'mac', 'time', 'rss']],[group_name],{group_name:group_thresholds[group_name]})
+
+
+# In[47]:
+
+
+ttf['count'].mean(),ttf['count'].iloc[-7:].mean()
+
+
+# In[48]:
+
+
+ttf
+
