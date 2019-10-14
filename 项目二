@@ -1,4 +1,4 @@
-#计算客户对应品牌的客户价值算法,理论参与,代码全部个人完成
+#客户/对/应品/牌价/值/算/法,理论参与,代码全部个人完成
 import numpy as np
 import pandas as pd
 train=pd.DataFrame([['小红','ZARA',200,'2018/2/2 22:15'],
