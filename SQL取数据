@@ -1,0 +1,64 @@
+create table if not exists `cy_analysis.day_reid_stats_category`(`mall_id` int,`day` string,`category_id` int,`uk_id` string,`dur` int,`delta_days` int,`times` int)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/day_reid_stats_category';
+
+insert overwrite table cy_analysis.day_reid_stats_category select ta.mall_id,ta.day,ta.company_type as category_id,ta.uk_id,ta.dur, datediff('2019-10-30', ta.day) as delta_days, row_number() over (partition by ta.uk_id,ta.company_type order by ta.day asc)  as times from (select mall_id,d as day,company_type,uk_id,sum(dur) as dur from (select ts.*,tc.company_type from dw.tdw_molli_shop_detail_d ts join dw.tdw_molli_category_info_td tc on ts.shop_id=tc.shop_id where d between date_sub('2019-10-30',60) and '2019-10-30' and role=3 and ts.shop_id in (select shop_id from dw.tdw_molli_area_info_td where mall_id in (2368,2378,2380,2381) and shop_name<>'NULL')) as tmp group by d,mall_id,company_type,uk_id) as ta;
+
+
+
+ create table if not exists `cy_analysis.reid_tfd_category_score`(`caculate_day` string,`category_id` int,`uk_id` string,`score` float)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_tfd_category_score';
+
+
+ insert overwrite table cy_analysis.reid_tfd_category_score select mall_id,'2019-10-30',category_id,uk_id,sum(t1.ft*t1.fn*t1.fd) as value from (select ta.mall_id,ta.day,ta.category_id,ta.uk_id,pow(1/(1+exp(6-6*ta.dur/tb.avg_dur)),0.3) as ft,pow(1/(1+ exp(6- 1.5*ta.times)),0.8) as fn,pow(1-1/(1+exp(6-0.2*ta.delta_days)),0.1) as fd from cy_analysis.day_reid_stats_category ta join cy_analysis.reid_category_avg_dur tb on ta.category_id=tb.category_id) t1 group by t1.category_id,t1.uk_id,t1.mall_id;
+
+ create table if not exists `cy_analysis.reid_tfd_category_data`(`day` string,`category_id` int,`uk_id` string,`dur` int,`delta_days` int,`times` int,`caculate_day` string,`score` float)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_tfd_category_data';
+
+ insert overwrite table cy_analysis.reid_tfd_category_data select dm.day,dm.category_id,dm.uk_id,dm.dur,dm.delta_days,dm.times,ts.caculate_day,ts.score from cy_analysis.day_reid_stats_category as dm join cy_analysis.reid_tfd_category_score as ts on dm.category_id=ts.category_id and dm.uk_id=ts.uk_id;
+
+
+
+
+
+create table if not exists `cy_analysis.reid_tfd_category_data`(`mall_id` int,`day` string,`category_id` int,`uk_id` string,`dur` int,`delta_days` int,`times` int,`caculate_day` string,`score` float)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_tfd_category_data';
+
+
+ insert overwrite table cy_analysis.reid_tfd_category_data select dm.mall_id,dm.day,dm.category_id,dm.uk_id,dm.dur,dm.delta_days,dm.times,ts.caculate_day,ts.score from cy_analysis.day_reid_stats_category as dm join cy_analysis.reid_tfd_category_score as ts on dm.category_id=ts.category_id and dm.uk_id=ts.uk_id;
+
+
+
+
+
+
+create table if not exists `cy_analysis.day_reid_stats_shop`(`mall_id` int,`day` string,`group_id` int,`uk_id` string,`dur` int,`delta_days` int,`times` int)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/day_reid_stats_shop';
+
+insert overwrite table cy_analysis.day_reid_stats_shop select ta.mall_id,ta.day,ta.shop_id as group_id,ta.uk_id,ta.dur, datediff('2019-10-30', ta.day) as delta_days, row_number() over (partition by ta.uk_id,ta.shop_id order by ta.day asc) as times from ( select mall_id,d as day,shop_id,uk_id,sum(dur) as dur from (select * from dw.tdw_molli_shop_detail_d where d between date_sub('2019-10-30',60) and '2019-10-30' and role=3 and shop_id in (select shop_id from dw.tdw_molli_area_info_td where mall_id in (2368,2378,2380,2381) and shop_name<>'NULL')) as tmp group by mall_id,d,shop_id,uk_id) as ta;
+
+
+create table if not exists `cy_analysis.reid_shop_avg_dur`(`mall_id` int,`group_id` int,`avg_dur` int)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_shop_avg_dur';
+
+ insert overwrite table cy_analysis.reid_shop_avg_dur select mall_id,group_id,avg(dur) as avg_dur from cy_analysis.day_reid_stats_shop group by group_id,mall_id;
+
+
+
+
+
+
+
+
+create table if not exists `cy_analysis.reid_tfd_shop_score`(`mall_id` int,`caculate_day` string,`group_id` int,`uk_id` string,`score` float)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_tfd_shop_score';
+
+ insert overwrite table cy_analysis.reid_tfd_shop_score select mall_id,'2019-10-30',group_id,uk_id,sum(t1.ft*t1.fn*t1.fd) as value from (select ta.mall_id,ta.day,ta.group_id,ta.uk_id,pow(1/(1+exp(6-6*ta.dur/tb.avg_dur)),0.3) as ft,pow(1/(1+ exp(6- 1.5*ta.times)),0.8) as fn,pow(1-1/(1+exp(6-0.2*ta.delta_days)),0.1) as fd from cy_analysis.day_reid_stats_shop ta join cy_analysis.reid_shop_avg_dur tb on ta.group_id=tb.group_id) t1 group by t1.group_id,t1.uk_id,t1.mall_id;
+
+ create table if not exists `cy_analysis.reid_tfd_shop_data`(`mall_id` int,`day` string,`group_id` int,`uk_id` string,`dur` int,`delta_days` int,`times` int,`caculate_day` string,`score` float)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_tfd_shop_data';
+
+ insert overwrite table cy_analysis.reid_tfd_shop_data select dm.mall_id,dm.day,dm.group_id,dm.uk_id,dm.dur,dm.delta_days,dm.times,ts.caculate_day,ts.score from cy_analysis.day_reid_stats_shop as dm join cy_analysis.reid_tfd_shop_score as ts on dm.group_id=ts.group_id and dm.uk_id=ts.uk_id;
+
+create table if not exists `cy_analysis.reid_category_avg_dur`(`mall_id` int,`category_id` int,`avg_dur` int)ROW FORMAT DELIMITED FIELDS TERMINATED BY','STORED AS TEXTFILE LOCATION 's3://zm-app-update/cy_data/data/reid_category_avg_dur';
+
+insert overwrite table cy_analysis.reid_category_avg_dur select mall_id,category_id,avg(dur) as avg_dur from cy_analysis.day_reid_stats_category group by category_id,mall_id;
+
+hive -e "select ts.* from cy_analysis.reid_tfd_category_data ts join (select uk_id,category_id,max(day) as last_day from (select distinct day,uk_id,category_id from cy_analysis.reid_tfd_category_data) as tmp group by uk_id,category_id) as mgd on mgd.uk_id=ts.uk_id and mgd.category_id=ts.category_id and mgd.last_day=ts.day" > /data/cy_data/reid_tfd_category_data.csv
+
+aws s3 cp  /data/cy_data/reid_tfd_category_data.csv   s3://zm-app-update/cy_data/data/etl/
+
+ hive -e "select ts.* from cy_analysis.reid_tfd_shop_data ts join (select uk_id,group_id,max(day) as last_day from (select distinct day,uk_id,group_id from cy_analysis.reid_tfd_shop_data) as tmp group by uk_id,group_id) as mgd on mgd.uk_id=ts.uk_id and mgd.group_id=ts.group_id and mgd.last_day=ts.day" > /data/cy_data/reid_tfd_shop_data.csv
+
+ aws s3 cp  /data/cy_data/reid_tfd_shop_data.csv   s3://zm-app-update/cy_data/data/etl/
