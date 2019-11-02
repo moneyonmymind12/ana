@@ -1,0 +1,72 @@
+#计算TFD,代码由本人完成,参与算法设计
+import pandas as pd
+import matplotlib.pyplot as plt
+def find_tfd_Threshold():
+    t_l = 1
+    # tfd_data=pd.read_csv(hyc_tfd_data_path,sep='\t',header=None,names=['day','shop_id','mac','dur','delta_days','times','caculate_d','score'])
+    tfd_data = pd.read_csv('reid_tfd_shop_data.csv', sep='\t', header=None,
+                           names=['mall_id','day','id','uk_id','dur','delta_days','times','caculate_d','score'])
+    # tfd_data=pd.read_csv(reid_tfd_category_data_path,sep='\t',header=None,names=['day','id','user_id','dur','delta_days','times','caculate_d','score'])
+    tfd_data = tfd_data[tfd_data['mall_id'] == 2378]
+    tfd_data['score'] = tfd_data['score'].astype(float)
+    id_list = list(set(tfd_data['id'].tolist()))
+    mall_list=list(set(tfd_data['mall_id'].tolist()))
+    tfd_threshold_f = open('costumer_raw_data.csv', 'w')
+    tfd_threshold_f.close()
+
+    tfd_threshold_f = open('costumer_raw_data.csv', 'a')
+
+    for id in id_list:
+
+        # tfd_shop_data=tfd_data.loc[tfd_data['shop_id']==shop_id,['mac','delta_days','times','score']]
+        tfd_shop_data = tfd_data.loc[tfd_data['id'] == id, ['uk_id', 'delta_days', 'times', 'score']]
+
+        q_value = 0.8
+        score_threshold = tfd_shop_data['score'].quantile(q_value)
+        while q_value < 1:
+            times_bigger = tfd_shop_data.loc[tfd_shop_data['score'] >= score_threshold, 'times']
+            times_lower = tfd_shop_data.loc[tfd_shop_data['score'] < score_threshold, 'times']
+            times_lower_50 = times_lower.quantile(0.50)  # 取times_lower的3/4分位数
+            times_bigger_25 = times_bigger.quantile(0.25)  # 取times_bigger 的1/4分位数
+            times_bigger_50 = times_bigger.quantile(0.5)  # 取times_bigger的1/2分位数
+
+            delta_days_bigger = tfd_shop_data.loc[tfd_shop_data['score'] >= score_threshold, 'delta_days']
+            delta_days_lower = tfd_shop_data.loc[tfd_shop_data['score'] < score_threshold, 'delta_days']
+            delta_days_lower_50 = delta_days_lower.quantile(0.5)
+            delta_days_bigger_50 = delta_days_bigger.quantile(0.5)
+
+            if (delta_days_lower_50 > delta_days_bigger_50) & (times_bigger_25 > times_lower_50) & (
+                    times_bigger_50 >= t_l):
+                print(id, score_threshold, q_value)
+                tfd_threshold_f.write(str(2378) + ',' + str(1) + ',' + str(id) + ',' + str(score_threshold) + '\n')
+                break
+
+            else:
+                q_value = q_value + 0.05
+                if q_value > 1:
+
+                    print(id, ' NotFound', score_threshold, q_value)
+                    tfd_threshold_f.write(str(2378) + ',' + str(id) + ',' + str(score_threshold) + '\n')
+
+                    # times
+                    data = []
+                    data.append(tfd_shop_data.loc[tfd_shop_data['score'] >= score_threshold, 'times'])
+                    data.append(tfd_shop_data.loc[tfd_shop_data['score'] < score_threshold, 'times'])
+                    plt.boxplot(data, showfliers=False)
+                    # plt.show()
+
+                    # delta_days
+                    data = []
+                    data.append(tfd_shop_data.loc[tfd_shop_data['score'] >= score_threshold, 'delta_days'])
+                    data.append(tfd_shop_data.loc[tfd_shop_data['score'] < score_threshold, 'delta_days'])
+                    plt.boxplot(data, showfliers=False)
+                    # plt.show()
+
+                else:
+                    score_threshold = tfd_shop_data['score'].quantile(q_value)
+
+        print(len(set(tfd_shop_data.loc[:, 'uk_id'].tolist())))
+        print(len(set(tfd_shop_data.loc[tfd_shop_data['score'] >= score_threshold, 'uk_id'].tolist())))
+
+    tfd_threshold_f.close()
+find_tfd_Threshold()
