@@ -1,0 +1,89 @@
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+import os
+import datetime
+import pandas as pd
+import json
+import argparse
+import requests 
+import demjson
+import jsonpath
+import sys
+def send_email(title, body, files=[]):
+    m = MIMEMultipart()
+    m['from'] = "ddd@ddd.com.cn"
+    m['to'] = "ddd@ddd.com.cn"
+    m['cc'] = "ddd@ddd.com.cn"
+    m['subject'] = title
+    m.attach(MIMEText(body,'html','utf-8'))
+    try:
+        server = smtplib.SMTP_SSL('192.', 465)
+        server.login(m['from'], "j")
+        server.sendmail(m['from'], m['to'].split(',')+m['cc'].split(','), m.as_string())
+        server.quit()
+        print('success')
+    except smtplib.SMTPException as e:
+        print('error:',e) 
+def call_interface(indata,outdata,data_type,his_file):
+    num=0
+    engdata = pd.read_csv(indata,names=['mac'], error_bad_lines=False, encoding="UTF-8", chunksize=500, low_memory=False, lineterminator='\n')
+    #最多同时调用500个
+    for i in engdata:
+        num+=1 
+		dist=[]
+        maclist=i['mac'].tolist()
+        macdict={}
+        macdict['MACS']=maclist
+        data=json.dumps(macdict)
+        dedata= json.loads(demjson.encode(data))
+        head = {"Content-Type": "application/json; charset=UTF-8"}
+        url='https://'%flag
+        req=requests.get(url,headers=head,data=dedata) 
+        try:
+            json=json.loads(req.text)
+            json_status="".join(jsonpath.jsonpath(json,'$..Status'))
+            if json_status=='0':
+                his=pd.DataFrame.from_dict(jsonpath.jsonpath(json,"$..data")[0])
+                his.to_csv(his_file,index=False,mode='a')
+                output=pd.DataFrame.from_dict(jsonpath.jsonpath(json,"$..data")[0])
+                if data_type=='GET_MAC_MULTI':
+                    output=output[['mac','dev_brand','dev_mdl','dev_type_name']]
+                    output=output['mac']+'\x01'+output['dev_brand']+"|"+output['dev_mdl'] 
+                else:
+                    output=output[['Mac','Brand','Model','Province']]
+                    output=output['Mac']+'\x01'+output['Brand']+"|"+output['Model']
+                output=pd.DataFrame(output)  
+                output.to_csv(outdata,header=False,index=False,mode='a') 
+        except Exception as e:
+            print(e)  
+def main(path):
+
+    ct='GET_BY_MAC_MULTI' 
+    ip='GET_INFO_BY_MAC_MULTI'
+    call_interface(path+args.ct_in_data,path+args.ct_out_data,ct,path+args.his_ct_data)
+    call_interface(path+args.ip_in_data,path+args.ip_out_data,ip,path+args.his_ip_data)
+if __name__ == '__main__':
+    start_time= datetime.datetime.now()
+    parser = argparse.ArgumentParser()
+	#CT输入文件
+    parser.add_argument('-a','--ct_in_data',help = 'ct_data input data')
+	#IP输入文件
+    parser.add_argument('-b','--ip_in_data',help = 'ip_data input data')    
+	#CT输出
+    parser.add_argument('-c','--ct_out_data',help = 'out_data') 
+	#IP输出
+    parser.add_argument('-d','--ip_out_data',help = 'out_data')
+	#所有调用过接口的历史数据
+    parser.add_argument('-e','--his_ct_data',help = 'his_ct_data')
+    parser.add_argument('-f','--his_ip_data',help = 'his_ip_data')
+    args = parser.parse_args()
+	path=os.getcwd().replace('auto-task/call_ct_mac_api','sig-data/ct/')
+    main(path)
+    end_time=datetime.datetime.now()
+    ct_line=os.popen('wc -l %s'%path+args.ct_out_data).read().split(' ')[0]
+    ip_line=os.popen('wc -l %s'%path+args.ip_out_data).read().split(' ')[0]
+    title = "j"
+    body ='大家好,开始时间为%s,结束时间为%s,CT条数为%s,IP条数为%s'%(str(start_time),str(end_time),ct_line,ip_line)
+    send_email(title, body)
