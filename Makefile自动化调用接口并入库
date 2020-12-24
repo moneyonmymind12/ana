@@ -1,0 +1,36 @@
+path=/home/maxnet/signature/
+path_had?=${path}auto-task/load-file-to-hadoop/
+path_auto?=${path}auto-task/call_ct_mac_api
+hfds_path?=${path}auto-task/hfds-download/
+data_path?=${path}sig-data/ctei/
+parse_path?=${path}auto-task/call_ct_mac_api/tools/parse_sigfile/
+data_str=${1:-`date -d "-1 day" +%Y%m%d`}
+	
+#拿到1500W数据
+#all:sql table interface dup parse load hadoop
+all:sql
+
+sql_get_data:
+	python ${path_had}run_sql.py -path ${path_auto} -fname ctei_data.sql
+
+hdfs_export:
+	python ${hfds_path}main.py -t 'data_un_call_iptv' -e 'iso-8859-1' -r ${data_path}
+	python ${hfds_path}main.py -t 'data_un_call_ct' -e 'iso-8859-1' -r ${data_path}
+#清空之前的历史文件
+clear_his_file:
+	echo "" >sig_out_ct.csv
+call_interface:
+	python mulmac.py -a data_un_call_ct.csv  -b data_un_call_iptv.csv -c sig_out_ct.csv -d sig_out_iptv.csv -e his_ctei_data.csv -f his_iptv_data.csv >${path_auto}/ctei_20.log
+sig_recoge_tool:
+	cd ${parse_path} && ./parse_sigfile -f  ${data_path}sig_out_ct.csv -type ctei && ./parse_sigfile -f  ${data_path}sig_out_iptv.csv -type iptv
+#待提取特征留在本地一天一个新文件
+data_process:
+	cd ${data_path} && awk -F '\x01' '{print$$1"\x01"$$4}' sig_out_ct_res.csv | awk -F '\x01' '{if($$2!=0) print $$1"\t"$$2}' >ct_loadin.csv
+	cd ${data_path} && awk -F '\x01' '{print$$1"\x01"$$4}' sig_out_iptv_res.csv | awk -F '\x01' '{if($$2!=0) print $$1"\t"$$2}' >iptv_loadin.csv
+  cd ${data_path} && awk -F '\x01' '{print$$1"\x01"$$2"\x01"$$4}' sig_out_ct_res.csv |awk -F '\x01' '{if($$3==0) print $$1"\t"$$2}' >ct_unknow_${data_str}.csv
+	cd ${data_path} && awk -F '\x01' '{print$$1"\x01"$$2"\x01"$$4}' sig_out_iptv_res.csv |awk -F '\x01' '{if($$3==0) print $$1"\t"$$2}' >iptv_unknow_${data_str}.csv
+upload_his:
+	cd ${path_had} && make his_ctei_tmp && make his_iptv_tmp
+upload_hadoop:
+	cd ${path_had} && make ctei_out_tmp > /home/maxnet/signature/logs/ctei_load.log 2>&1 && make iptv_out_tmp > /home/maxnet/signature/logs/iptv_load.log 2>&1
+	
