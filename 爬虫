@@ -1,0 +1,161 @@
+# -*- coding:utf-8 -*-
+import json
+import time
+from sign import get_tokens
+import sys, urllib as ul,requests
+import hashlib
+import os
+from urllib.parse import unquote
+import demjson
+import signal
+import sys
+import requests
+import threading
+import queue
+import time
+from bs4 import BeautifulSoup
+import pandas as pd
+import os
+import urllib
+import urllib.request
+import paddlehub as hub
+import cv2
+import re
+import os
+import json
+import jsonpath
+import argparse
+mutex = threading.Lock()
+is_exit = False
+class Spider(threading.Thread):
+    def __init__(self,urlque,idque,urlonlyque,i):
+        self.img_name=str(i)
+        self.urlque = urlque
+        self.idque = idque
+        self.urlonlyque=urlonlyque
+        self.f_user = open(args.crawurl, 'a+')
+        threading.Thread.__init__(self)
+    def uland_taobao(self,idlist,idque,iddict):
+        timestamp=int(time.time())
+        tokens = get_tokens()
+        _m_h5_tk, _m_h5_tk_enc = tokens['_m_h5_tk'], tokens['_m_h5_tk_enc']
+        item_id=idlist[0]
+        categoryId=idlist[1]
+        sellerId=idlist[2]
+        data='{"itemId":%s,"price":30000,"categoryId":%s,"sellerId":%s}'%(item_id,categoryId,sellerId)
+        cookie = "_m_h5_tk=_m_h5_tk;_m_h5_tk_enc=_m_h5_tk_enc;"
+        key=_m_h5_tk.split('_')[0]
+        data_string=ul.parse.quote_plus(data)
+        str2 = key + "&" + str(timestamp) + "384&12574478&" + data
+        sign_str= hashlib.md5(str2.encode("utf8")).hexdigest()
+        request_params = {
+            'jsv': '2.4.5',
+            'appKey': '12574478',
+            't': str(timestamp)+'384',
+            'api': 'mtop.taobao.idle.item.recommend.list',
+            'v': '2.0',
+            'AntiCreep': 'false',
+            'preventFallback': 'true',
+            'type': 'jsonp',
+            'dataType': 'jsonp',
+            'callback': 'mtopjsonp8',
+            'data': data_string,
+            'sign': sign_str,
+        }
+        # 防止%被转成%25
+        request_params['data'] = unquote(request_params['data'])
+        r = requests.get('https://h5api.m.taobao.com/h5/mtop.taobao.idle.item.recommend.list/2.0/',
+                         params=request_params,
+                         headers={
+                             'User-Agent':'Mozilla/5.0 (Android 10.0; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
+                             'Cookie':"_m_h5_tk=%s;_m_h5_tk_enc=%s;"%(_m_h5_tk,_m_h5_tk_enc)
+                         })
+        aa=r.text
+        aa=aa.replace('mtopjsonp8(','').replace(')','')
+        json2=json.loads(aa)
+        tmp_list=[]
+        if 'cardList' in json2['data']:
+            json3=json2['data']['cardList']
+            for i in json3:
+                if i['cardType']!='61501':
+                    for r in jsonpath.jsonpath(i,'$..cardData'):
+                        for j in r:
+                            id=[]
+                            urlonly=[]
+                            if ('路由' or 'tp-link' or '小米' or '华硕' or '无线')  in str(jsonpath.jsonpath(j,'$..title')):
+                                if len (str(jsonpath.jsonpath(j,'$..ext_info')).split(';'))>8: 
+                                     
+                                    id.append("".join(jsonpath.jsonpath(j,'$..item_id')))
+                                    id.append(str(jsonpath.jsonpath(j,'$..ext_info')).split(';')[8].split(':')[1])
+                                    id.append(str(jsonpath.jsonpath(j,'$..ext_info')).split(';')[9].split(':')[1])
+                                    id.append(jsonpath.jsonpath(j,'$..imageList'))
+                                    id.append("".join(jsonpath.jsonpath(j,'$..title')))
+                                    for k in jsonpath.jsonpath(j,'$..imageList'):
+                                       self.urlonlyque.put(k)       
+                            self.idque.put(id)
+                            self.urlque.put(id)                         
+                            url=self.urlque.get()
+                            urlonly=self.urlonlyque.get()
+                            self.f_user.write(str(url)+'\n')
+
+    def run(self):
+        global is_exit
+        i = 0
+        iddict={}
+        while not is_exit:
+            idlist = self.idque.get()
+            print(idlist)
+            if len(idlist)!=0:
+                self.uland_taobao(idlist,self.idque,iddict)
+                time.sleep(2)
+            else:
+                print(".")
+            i += 1
+            if i%10==0:
+                self.f_user.close()
+                self.f_user = open(args.crawurl, 'a+')
+            linenum=int(os.popen('wc -l %s'%args.crawurl).read().split(' ')[0])
+            print(linenum)
+            if linenum>7700:
+                os.system("sort -u %s > %s"%(args.crawurl,args.crawdup))
+                os._exit(0)
+        self.f_user.close()
+def handler(signum, frame):
+    global is_exit
+    is_exit = True
+    print ("receive a signal %d, is_exit = %d" % (signum, is_exit))
+    sys.exit(0)
+
+def main():
+    NUM_WORKERS = 1
+    NUM_WORKERS_ocr = 5
+    fileque= queue.Queue()
+    urlque=queue.Queue()
+    item_id="630529673127"
+    stop =False
+    idque = queue.Queue()
+    urlonlyque=queue.Queue()
+    categoryId='50025261'
+    sellerId='14116005'
+    idlist=[item_id,categoryId,sellerId,[]]
+    idque.put(idlist)
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+    threads = []
+    threads_ocr = []
+    for i in range(NUM_WORKERS):
+        spider = Spider(urlque,idque,urlonlyque,i)
+        spider.setDaemon(True)
+        spider.start()
+        threads.append(spider)
+    while True:
+        for i in threads:
+            if not i.isAlive():
+                break
+        time.sleep(1)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--crawurl',help='crawurl') 
+    parser.add_argument('--crawdup',help='crawdup')
+    args = parser.parse_args()
+    main()
