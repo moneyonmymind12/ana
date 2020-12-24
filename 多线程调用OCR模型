@@ -1,0 +1,101 @@
+# -*- coding:utf-8 -*-
+import signal
+import sys
+import requests
+import threading
+import queue
+import time
+from bs4 import BeautifulSoup
+import pandas as pd
+import os
+import urllib
+import urllib.request
+#import pandas as pd
+#import csv
+import paddlehub as hub
+import cv2
+import re
+import os
+import json
+
+mutex = threading.Lock()
+is_exit = False
+class Tumblr(threading.Thread):
+
+    def __init__(self, queue1,queue2,i):
+        self.img_name=str(i)
+        self.user_queue1 = queue1
+        self.user_queue2 = queue2
+        self.f_user = open('mac1030.csv', 'a+')
+        threading.Thread.__init__(self)
+    def get_image(self,url):
+        try:
+             request = urllib.request.Request(url)
+             response = urllib.request.urlopen(request)
+             get_img = response.read()
+             img=self.img_name+'.jpg'
+             with open(img,'wb') as fp:
+                 fp.write(get_img)
+                 print('图片下载完成')
+        except:
+            print('图片访问空')
+    def paddle(self,url):
+        print("paddle_url", url)
+        img=self.img_name+'.jpg'
+        image_path= img
+        print(image_path)
+        results = os.popen('hub run chinese_ocr_db_crnn_mobile --input_path %s'%image_path).read()
+        xing=False
+        mac=False
+        maclist=[]
+        try:
+            text = json.loads(results.replace("'","\""))
+            mutex.acquire()
+            print ("-->")
+            self.f_user.write(str(json.dumps(text[0]['data']))+'\t'+str(url)+'\n')
+            mutex.release()
+        except Exception as err:
+            print("Exception", err, url)
+    def run(self):
+        global is_exit
+        i = 0
+        while not is_exit:
+            url = self.user_queue1.get()
+            self.get_image(url)
+            self.paddle(url)
+            time.sleep(2)
+            i += 1
+            if i%10==0:
+               self.f_user.close()
+               self.f_user = open('mac1030.csv', 'a+')
+        self.f_user.close()
+def handler(signum, frame):
+    global is_exit
+    is_exit = True
+    print ("receive a signal %d, is_exit = %d" % (signum, is_exit))
+    sys.exit(0)
+def main():
+    NUM_WORKERS = 32
+    q1 = queue.Queue()
+    q2=queue.Queue()
+    # 修改这里的 username
+    imgcsv=pd.read_csv('imgurl1126.csv',names=['link'])
+    for i,r in imgcsv.iterrows():
+        q1.put(r['link'])
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+    threads = []    
+    for i in range(NUM_WORKERS):
+        tumblr = Tumblr(q1,q2,i)
+        tumblr.setDaemon(True)
+        tumblr.start()
+        threads.append(tumblr)
+    for i in range(NUM_WORKERS):
+        tumblr.join()
+    while True:
+        for i in threads:
+            if not i.isAlive():
+                break
+        time.sleep(1)
+if __name__ == '__main__':
+    main()
